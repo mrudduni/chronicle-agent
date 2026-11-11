@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { HashEmbedder } from "../src/embed";
 import type { WorkerLlm } from "../src/llm/types";
+import { memoryMap, thingDetail } from "../src/memory/map";
 import { redact } from "../src/memory/redact";
 import { ftsQuery } from "../src/memory/retrieve/query";
 import { FixedClock } from "../src/time";
@@ -190,5 +191,24 @@ describe("recall (R)", () => {
     clock.set("2026-11-11T10:00:00+05:30");
     const prep = await app.agent.prepare({ userId: USER, text: "Is Monday.com cheaper than HubSpot?", browserTz: IST });
     expect(prep.resolved).toHaveLength(0);
+  });
+});
+
+describe("memory map (read-only view)", () => {
+  it("links a thing to the conversation its facts came from, and lists them with sources", async () => {
+    const id = await pastTurn("2026-11-09T10:00:00+05:30", CRM_Q, CRM_A);
+    const map = memoryMap(app.db, USER);
+    expect(map.conversations.map((c) => [c.turnId, c.day])).toEqual([[id, "2026-11-09"]]);
+    expect(map.things).toEqual([{ key: "hubspot", name: "HubSpot", type: "product", facts: 1 }]);
+    expect(map.links).toEqual([{ thing: "hubspot", turnId: id, facts: 1 }]);
+
+    const detail = thingDetail(app.db, USER, "hubspot")!;
+    expect(detail.facts[0]).toMatchObject({ value: "$20", day: "2026-11-09", sourceUrl: "https://www.hubspot.com/pricing" });
+    expect(thingDetail(app.db, USER, "nothing-here")).toBeNull();
+  });
+
+  it("stays inside one user's memory", async () => {
+    await pastTurn("2026-11-09T10:00:00+05:30", CRM_Q, CRM_A);
+    expect(memoryMap(app.db, "someone-else")).toEqual({ conversations: [], things: [], links: [] });
   });
 });

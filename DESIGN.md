@@ -25,7 +25,7 @@ message ─► PRE (code, ~10–50 ms)                      ─► LOOP (model) 
 - **Provider-neutral loop.** The loop only sees text deltas, tool calls and a stop reason. Claude and Gemini each sit behind a small `ChatModel` adapter that keeps its own message format, so Claude's thinking blocks and Gemini's thought signatures are echoed back untouched. Claude is the default; Gemini (free tier) is a key away.
 - **Local-first.** SQLite (`node:sqlite`, no native build) plus a 34 MB local embedding model: the user's history never leaves the machine except in the prompt. That's how minimi treats personal context too.
 - **Ambiguity resolved by evidence.** English speakers genuinely disagree on what "last Tuesday" means. Any fixed grammar rule is wrong for some users; checking which Tuesday actually has the conversation isn't.
-- **Visible working.** The UI streams how dates were read, what was recalled and each search, so a wrong assumption is caught in a second, not after reading the answer.
+- **Visible working.** A research panel beside the chat streams how dates were read, what was recalled, and every search and page as it arrives. Each citation opens that page in the panel, so a wrong assumption or a weak source is caught in one click, not after reading the whole answer.
 
 ## Considered and rejected
 
@@ -41,6 +41,6 @@ message ─► PRE (code, ~10–50 ms)                      ─► LOOP (model) 
 
 1. **Native search-result citations** (`search_result` blocks), so every cited sentence carries the exact source passage and claims are verified against it.
 2. **Proactive open loops:** when the user returns to a topic with open items, re-check those entities in the background and lead with what changed.
-3. **Bi-temporal knowledge graph** over the claims (valid time vs. when the agent said it), with contradiction detection across sources.
+3. **A real knowledge graph**, only if questions need multi-hop answers. Today the memory map is a graph-shaped *view* (entities, conversations and claims, drawn on a timeline) built from plain queries; a **bi-temporal graph** over the claims (valid time vs. when the agent said it), with contradiction detection across sources.
 4. **Learn the ambiguity policy** from the user's corrections ("by last Tuesday I always mean the previous week").
 5. **Bigger eval set** (LongMemEval's temporal-reasoning split, FreshQA) run in CI, with latency budgets as failing tests.

@@ -3,15 +3,24 @@
  * a POST, which EventSource can't do, so the stream is read with fetch and
  * parsed by hand (it's only "event:" and "data:" lines).
  */
-import type { AgentEvent } from "../../src/agent/events";
+import type { AgentEvent, SearchItem } from "../../src/agent/events";
+import type { MemoryMap, ThingDetail } from "../../src/memory/map";
 
-export type { AgentEvent };
+export type { AgentEvent, MemoryMap, SearchItem, ThingDetail };
 
 export interface Source {
   id: string;
   title: string;
   url: string;
   publishedAt: string | null;
+}
+
+export interface StoredSearch {
+  callId: string;
+  query: string;
+  mode: string;
+  since?: string;
+  items: SearchItem[];
 }
 
 export interface StoredMessage {
@@ -24,6 +33,7 @@ export interface StoredMessage {
   status: string;
   replyTo: number | null;
   sources: Source[];
+  searches: StoredSearch[];
 }
 
 export interface ThreadSummary {
@@ -79,6 +89,8 @@ export const api = {
   forget: (turnId: number) => post("/api/forget", { turnId }).then((r) => json(r)),
   setTimezone: (tz: string | null) => post("/api/timezone", { tz }).then((r) => json(r)),
   demo: () => fetch("/api/demo").then((r) => json<DemoState>(r)),
+  memoryMap: () => fetch("/api/memory/map", { headers: headers() }).then((r) => json<MemoryMap>(r)),
+  thing: (key: string) => fetch(`/api/memory/thing/${encodeURIComponent(key)}`, { headers: headers() }).then((r) => json<ThingDetail>(r)),
   loadDemo: () => post("/api/demo", { tz: browserTz() }).then((r) => json<DemoState>(r)),
 
   async chat(body: { threadId?: string; text: string }, onEvent: (e: AgentEvent) => void, signal: AbortSignal) {

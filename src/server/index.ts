@@ -11,6 +11,8 @@
  *   GET  /api/traces/latest  timings of the last turn (dev panel)
  *   GET  /api/demo           whether demo data is loaded, and questions to try
  *   POST /api/demo           load (or reload) the demo history for today's dates
+ *   GET  /api/memory/map     what memory holds, shaped as a graph (read-only queries)
+ *   GET  /api/memory/thing/:key  everything said about one thing, oldest first
  *
  * Every route works on one "profile": the person's own memory, or the demo.
  * The UI picks it with the x-chronicle-profile header; the two never mix.
@@ -25,8 +27,9 @@ import { DEMO_USER, demoState, seedDemo } from "../demo/seed";
 import { config } from "../config";
 import { LocalEmbedder } from "../embed";
 import { chatModel } from "../llm/client";
+import { memoryMap, thingDetail } from "../memory/map";
 import { isValidZone } from "../time";
-import type { AgentEvent } from "../agent/events";
+import { type AgentEvent, type SearchItem, toSearchItems } from "../agent/events";
 
 const app = createApp();
 const { store, agent, derivation, db, clock, search } = app;
@@ -78,16 +81,22 @@ api.get("/threads/:id", (c) => {
   const thread = store.thread(c.req.param("id"));
   if (!thread || thread.user_id !== userOf(c)) return c.json({ error: "not found" }, 404);
   const messages = store.threadMessages(thread.id).map((m) => {
-    // Re-attach the cited sources to old answers, so citations still link after a reload.
-    let sources: Array<{ id: string; title: string; url: string; publishedAt: string | null }> = [];
+    // Re-attach the searches and cited sources to old answers, so citations
+    // still link and the research panel still works after a reload.
+    let sources: SearchItem[] = [];
+    let searches: Array<{ callId: string; query: string; mode: string; since?: string; items: SearchItem[] }> = [];
     if (m.role === "assistant" && m.reply_to) {
       const cited = citedIds(m.content);
-      sources = store
-        .searchesForTurn(m.reply_to)
-        .flatMap((s) => s.results as typeof sources)
-        .filter((r) => cited.has(r.id));
+      searches = store.searchesForTurn(m.reply_to).map((s) => ({
+        callId: `stored-${s.id}`,
+        query: s.query,
+        mode: s.params.mode ?? "page",
+        since: s.params.since,
+        items: toSearchItems(s.results as Parameters<typeof toSearchItems>[0]),
+      }));
+      sources = searches.flatMap((s) => s.items).filter((r) => cited.has(r.id));
     }
-    return { id: m.id, role: m.role, content: m.content, ts: m.ts_utc, tz: m.tz, localDay: m.local_day, status: m.status, replyTo: m.reply_to, sources };
+    return { id: m.id, role: m.role, content: m.content, ts: m.ts_utc, tz: m.tz, localDay: m.local_day, status: m.status, replyTo: m.reply_to, sources, searches };
   });
   return c.json({ thread, messages });
 });
@@ -121,6 +130,13 @@ api.get("/health", (c) => {
     declaredTz: user.declaredTz,
     pendingJobs: derivation.queue.pendingCount(),
   });
+});
+
+api.get("/memory/map", (c) => c.json(memoryMap(db, userOf(c))));
+
+api.get("/memory/thing/:key", (c) => {
+  const detail = thingDetail(db, userOf(c), c.req.param("key"));
+  return detail ? c.json(detail) : c.json({ error: "not found" }, 404);
 });
 
 api.get("/demo", (c) => c.json(demoState(app)));

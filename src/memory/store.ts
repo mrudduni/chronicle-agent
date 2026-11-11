@@ -186,12 +186,21 @@ export class MemoryStore {
 
   searchesForTurn(turnId: number) {
     const rows = this.db.prepare("SELECT * FROM searches WHERE turn_id = ? ORDER BY id").all(turnId) as Array<{
+      id: number;
       query: string;
+      params_json: string;
       results_json: string;
       provider: string;
       ts_utc: number;
     }>;
-    return rows.map((r) => ({ query: r.query, provider: r.provider, ts: r.ts_utc, results: parseJson<unknown[]>(r.results_json, []) }));
+    return rows.map((r) => ({
+      id: r.id,
+      query: r.query,
+      provider: r.provider,
+      ts: r.ts_utc,
+      params: parseJson<{ mode?: string; since?: string }>(r.params_json, {}),
+      results: parseJson<unknown[]>(r.results_json, []),
+    }));
   }
 
   appendEvent(userId: string, kind: string, payload: unknown, at: number) {

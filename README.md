@@ -30,6 +30,10 @@ On first start, a ~34 MB embedding model downloads into `.cache/`. Until it's re
 
 **Fastest: demo data.** On the start screen, click **Try demo data**. It loads a few earlier conversations (a CRM shortlist on Monday, Postgres hosting the Tuesday before last, email tools about two weeks ago), dated relative to today and kept apart from your own memory. Then ask the suggested questions, such as *"Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then?"* Prices in the demo are sample values, so the re-check finds real changes. **Reset** reloads it for today's dates; **Exit demo** goes back to your own data.
 
+While it answers, the **Research** panel on the right shows how dates were read, what was recalled, and every search and page as it arrives. Click any citation to jump to the page it came from.
+
+**Memory map** (in the sidebar) draws what the agent remembers on a timeline: things discussed above, the conversations they came from below, by day. Click a thing to see every fact stated about it, in date order with sources (so a price that changed between two conversations shows up as two entries), or click a conversation to open it. It's a read-only view built from queries over the claim ledger; there's no separate graph store.
+
 Or build up your own history:
 
 1. Ask *"Shortlist 5 CRM tools for a 20-person sales team, with current pricing."*

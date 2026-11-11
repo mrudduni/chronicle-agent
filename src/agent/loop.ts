@@ -21,7 +21,7 @@ import { config } from "../config";
 import type { ChatMessage, ChatModel, RoundResult, ToolCall, ToolOutput } from "../llm/types";
 import { type SearchResult, type SearchService, formatResultsForModel } from "../search";
 import { WEB_SEARCH_TOOL } from "./prompt";
-import type { Emit } from "./events";
+import { type Emit, toSearchItems } from "./events";
 
 const SearchInput = z.object({
   query: z.string().min(1),
@@ -140,7 +140,7 @@ async function runSearch(
     const { results, fromCache, dateFilterApplied } = await input.search.search(effective, ids, input.signal);
     sources.push(...results);
     input.onSearch(req.query, effective, results);
-    input.emit({ type: "search", callId: call.id, query: req.query, mode: req.mode, since: effective.since, state: "done", results: results.length, fromCache });
+    input.emit({ type: "search", callId: call.id, query: req.query, mode: req.mode, since: effective.since, state: "done", results: results.length, items: toSearchItems(results), fromCache });
     return { call, isError: false, content: formatResultsForModel(effective, results, input.today, { dateFilterApplied, fromCache }) };
   } catch (err) {
     const message = (err as Error).message;
