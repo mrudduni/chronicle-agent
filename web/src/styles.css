@@ -1,0 +1,126 @@
+:root {
+  --bg: #fbfbfa;
+  --panel: #f3f3f1;
+  --text: #1d1d1b;
+  --muted: #6b6b66;
+  --line: #e3e3df;
+  --accent: #3b5bdb;
+  --accent-soft: #e8edfd;
+  --warn: #b35c00;
+  --warn-soft: #fff1e0;
+  --bubble: #eceff6;
+  --code: #f0f0ed;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615;
+    --panel: #1e1e1c;
+    --text: #e9e9e6;
+    --muted: #9a9a94;
+    --line: #2e2e2b;
+    --accent: #8ea6ff;
+    --accent-soft: #232b45;
+    --warn: #ffb35c;
+    --warn-soft: #3a2a14;
+    --bubble: #262a33;
+    --code: #252523;
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+button { font: inherit; color: inherit; cursor: pointer; }
+
+.layout { display: grid; grid-template-columns: 260px 1fr; height: 100vh; }
+
+/* sidebar */
+.sidebar { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.sidebar .new { margin: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); text-align: left; }
+.sidebar .new:hover { border-color: var(--accent); }
+.sidebar nav { overflow-y: auto; padding: 0 8px 12px; }
+.thread { display: flex; justify-content: space-between; gap: 8px; width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: none; text-align: left; }
+.thread:hover { background: var(--line); }
+.thread.active { background: var(--accent-soft); }
+.thread .title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.thread .meta { color: var(--muted); font-size: 12px; flex: none; }
+
+/* main */
+main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid var(--line); }
+.brand { font-weight: 600; letter-spacing: 0.01em; }
+.status { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--panel); color: var(--muted); border: 1px solid var(--line); }
+.badge.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.tz { font: inherit; font-size: 12px; max-width: 220px; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+
+.chat { flex: 1; overflow-y: auto; padding: 24px 20px 8px; }
+.chat > * { max-width: 760px; margin-left: auto; margin-right: auto; }
+
+.empty { margin-top: 12vh; }
+.empty h1 { font-size: 24px; font-weight: 600; margin: 0 0 8px; }
+.empty p { color: var(--muted); margin: 0 0 20px; }
+.examples { display: grid; gap: 8px; }
+.examples button { text-align: left; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.examples button:hover { border-color: var(--accent); }
+
+.msg { margin-bottom: 22px; }
+.msg.user { display: flex; flex-direction: column; align-items: flex-end; }
+.msg.user .bubble { background: var(--bubble); padding: 9px 14px; border-radius: 14px 14px 4px 14px; max-width: 85%; white-space: pre-wrap; }
+.forget { margin-top: 2px; border: 0; background: none; color: var(--muted); font-size: 11px; opacity: 0; }
+.msg.user:hover .forget { opacity: 1; }
+
+.answer { overflow-wrap: anywhere; }
+.answer p { margin: 0 0 10px; }
+.answer table { border-collapse: collapse; margin: 8px 0 12px; font-size: 14px; display: block; overflow-x: auto; }
+.answer th, .answer td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+.answer th { background: var(--panel); font-weight: 600; }
+.answer code { background: var(--code); padding: 1px 4px; border-radius: 4px; font-size: 0.92em; }
+.answer pre { background: var(--code); padding: 10px; border-radius: 8px; overflow-x: auto; }
+.answer a { color: var(--accent); }
+.answer .cite { font-size: 11px; vertical-align: super; text-decoration: none; padding: 0 2px; margin-left: 1px; border-radius: 4px; background: var(--accent-soft); }
+.muted { color: var(--muted); }
+.cursor { display: inline-block; width: 7px; height: 15px; background: var(--accent); vertical-align: text-bottom; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.note { color: var(--muted); font-size: 13px; }
+.error { color: var(--warn); background: var(--warn-soft); padding: 8px 12px; border-radius: 8px; font-size: 14px; }
+
+.sources { margin: 10px 0 0; padding-left: 22px; font-size: 13px; color: var(--muted); }
+.sources a { color: var(--text); text-decoration: none; }
+.sources a:hover { text-decoration: underline; }
+.sources .meta { margin-left: 6px; }
+
+/* the agent's visible working */
+.activity { margin-bottom: 8px; font-size: 13px; }
+.activity-toggle { border: 0; background: none; padding: 0; color: var(--muted); text-align: left; }
+.activity-toggle:not(:disabled):hover { color: var(--text); }
+.activity-body { display: grid; gap: 4px; margin-top: 6px; padding-left: 10px; border-left: 2px solid var(--line); }
+.chip { color: var(--muted); }
+.chip .label { color: var(--text); }
+.chip .sub { font-size: 12px; }
+.chip.time.use-and-state .label, .chip.time.answer-both .label { color: var(--accent); }
+.chip.memory.missing { color: var(--warn); }
+.chip ul { margin: 2px 0 0; padding-left: 18px; }
+.chip .meta { color: var(--muted); }
+.chip.search.start .meta { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.4; } }
+.timings { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+.composer { display: flex; gap: 8px; padding: 12px 20px 18px; max-width: 800px; width: 100%; margin: 0 auto; }
+.composer textarea { flex: 1; resize: none; font: inherit; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); min-height: 44px; max-height: 200px; field-sizing: content; }
+.composer textarea:focus { outline: none; border-color: var(--accent); }
+.composer button { padding: 0 18px; border-radius: 12px; border: 0; background: var(--accent); color: white; }
+.composer button:disabled { opacity: 0.4; cursor: default; }
+
+@media (max-width: 720px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  header { padding: 10px 16px; }
+  .chat { padding: 16px; }
+  .composer { padding: 10px 16px 14px; }
+}

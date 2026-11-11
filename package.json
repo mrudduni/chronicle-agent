@@ -1,0 +1,41 @@
+{
+  "name": "chronicle-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A chat agent with web search that remembers what you talked about, and when.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,magenta \"tsx watch src/server/index.ts\" \"vite\"",
+    "start": "tsx src/server/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "eval": "tsx eval/run.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "@hono/node-server": "^2.1.6",
+    "@huggingface/transformers": "^4.3.2",
+    "hono": "^4.13.17",
+    "luxon": "^3.7.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.7.6",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "concurrently": "^10.0.7",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.7",
+    "vitest": "^5.1.0"
+  }
+}
