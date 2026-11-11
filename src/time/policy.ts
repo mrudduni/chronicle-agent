@@ -31,7 +31,33 @@ export interface ResolvedTime {
 export type SpanScorer = (span: TemporalSpan) => number;
 
 export function decide(readings: TemporalReading[], scorer?: SpanScorer): ResolvedTime[] {
-  return readings.filter((r) => r.candidates.length > 0).map((reading) => decideOne(reading, scorer));
+  const resolved: ResolvedTime[] = [];
+  for (const reading of readings.filter((r) => r.candidates.length > 0)) {
+    const parent = reading.follows != null ? resolved.find((r) => r.reading.index === reading.follows) : undefined;
+    resolved.push(parent ? followParent(reading, parent) : decideOne(reading, scorer));
+  }
+  return resolved;
+}
+
+/**
+ * "since then" takes the same choice as the date it refers back to: its
+ * candidates line up one-to-one with that reading's. When the parent covers
+ * several dates (answer-both), this runs from the earliest of them.
+ */
+function followParent(reading: TemporalReading, parent: ResolvedTime): ResolvedTime {
+  const at = (span: TemporalSpan) => reading.candidates[parent.reading.candidates.indexOf(span)];
+  const spans = parent.filterSpans.map(at).filter((s): s is TemporalSpan => !!s);
+  const chosen = spans.reduce((a, b) => (b.start < a.start ? b : a), at(parent.chosen) ?? reading.candidates[0]!);
+  return {
+    reading,
+    chosen,
+    filterSpans: [chosen],
+    alternatives: reading.candidates.filter((c) => c !== chosen),
+    // The parent already says which date was assumed; no need to state it twice.
+    decision: parent.decision === "ask" ? "ask" : "use",
+    reason: `runs from ${parent.chosen.label}`,
+    soft: parent.soft,
+  };
 }
 
 function decideOne(reading: TemporalReading, scorer?: SpanScorer): ResolvedTime {

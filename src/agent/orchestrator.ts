@@ -10,9 +10,9 @@
  * prepare() is split out from run() so the whole PRE stage can be tested
  * without a model or network.
  */
-import type Anthropic from "@anthropic-ai/sdk";
 import { config } from "../config";
 import type { Db } from "../db";
+import type { ChatMessage, ChatModel } from "../llm/types";
 import type { Derivation } from "../memory/derive";
 import { knownEntityNames } from "../memory/derive/entities";
 import { memoryChip } from "../memory/retrieve/render";
@@ -32,6 +32,7 @@ import {
   searchWindowOf,
   uiChipsOf,
 } from "../time";
+import { citedIds } from "./citations";
 import type { Emit } from "./events";
 import { runLoop } from "./loop";
 import { SYSTEM_PROMPT, buildContextBlock } from "./prompt";
@@ -52,7 +53,8 @@ export interface AgentDeps {
   derivation: Derivation;
   search: SearchService;
   clock: Clock;
-  client: Anthropic | null;
+  /** Null when the provider's API key is missing; the turn then ends with a clear error. */
+  model: ChatModel | null;
   timeFallback?: LlmTimeFallback;
 }
 
@@ -64,7 +66,7 @@ export interface PreparedTurn {
   resolved: ResolvedTime[];
   pack: MemoryPack;
   contextBlock: string;
-  messages: Anthropic.Beta.BetaMessageParam[];
+  messages: ChatMessage[];
   timings: Record<string, number>;
 }
 
@@ -140,7 +142,7 @@ export class Agent {
       searchBackend: provider ? { name: provider.name, dateFilter: provider.supportsDateFilter } : null,
     });
 
-    const messages: Anthropic.Beta.BetaMessageParam[] = [
+    const messages: ChatMessage[] = [
       ...historyToParams(history),
       { role: "user", content: input.text },
       { role: "system", content: contextBlock },
@@ -174,15 +176,15 @@ export class Agent {
     emit({ type: "time", now: describeNow(ctx), tz: ctx.tz, tzSource: ctx.tzSource, frozen: ctx.frozen, chips: uiChipsOf(prep.resolved, ctx) });
     emit({ type: "memory", ...memoryChip(prep.pack) });
 
-    if (!this.d.client) {
-      emit({ type: "error", message: "ANTHROPIC_API_KEY is not set. Add it to .env and restart." });
+    if (!this.d.model) {
+      emit({ type: "error", message: `${config.keyName} is not set. Add it to .env and restart.` });
       return;
     }
 
     let result;
     try {
       result = await runLoop({
-        client: this.d.client,
+        model: this.d.model,
         system: SYSTEM_PROMPT,
         messages: prep.messages,
         search: this.d.search,
@@ -205,7 +207,7 @@ export class Agent {
       return;
     }
 
-    const partial = result.stop === "aborted" || result.stop === "max_tokens";
+    const partial = result.stop === "aborted" || result.stop === "max_tokens" || result.stop === "error";
     const reply = this.d.store.appendMessage({
       threadId: prep.threadId,
       userId: input.userId,
@@ -218,7 +220,7 @@ export class Agent {
       status: partial ? "partial" : "complete",
     });
 
-    const cited = new Set([...result.text.matchAll(/\[S(\d+)\]/g)].map((m) => `S${m[1]}`));
+    const cited = citedIds(result.text);
     emit({
       type: "sources",
       sources: result.sources.filter((s) => cited.has(s.id)).map((s) => ({ id: s.id, title: s.title, url: s.url, publishedAt: s.publishedAt })),
@@ -239,6 +241,7 @@ export class Agent {
       .run(prep.userMessage.id, JSON.stringify({ timings, stop: result.stop, resolved: prep.resolved.map((r) => ({ text: r.reading.text, chosen: r.chosen.label, decision: r.decision })), memoryMode: prep.pack.mode }), this.d.clock.now());
 
     emit({ type: "done", messageId: reply.id, partial, timings });
+    if (result.stop === "error") emit({ type: "error", message: friendlyError(result.error) });
 
     // POST: memory work happens after the user has the answer.
     if (!partial) this.d.derivation.afterTurn(prep.userMessage.id);
@@ -246,8 +249,8 @@ export class Agent {
 }
 
 /** Thread history as API messages. Only text: tool calls from old turns aren't replayed. */
-function historyToParams(history: MessageRow[]): Anthropic.Beta.BetaMessageParam[] {
-  const out: Anthropic.Beta.BetaMessageParam[] = [];
+function historyToParams(history: MessageRow[]): ChatMessage[] {
+  const out: ChatMessage[] = [];
   for (const m of history) {
     if (!m.content.trim()) continue;
     out.push({ role: m.role, content: m.status === "partial" ? `${m.content}\n\n[answer was cut off]` : m.content });
@@ -268,8 +271,14 @@ function round(ms: number) {
 
 function friendlyError(err: unknown): string {
   const e = err as { status?: number; message?: string };
-  if (e?.status === 401) return "The Anthropic API key was rejected. Check ANTHROPIC_API_KEY in .env.";
+  // Gemini answers a bad key with 400 "API key not valid" rather than 401.
+  if (e?.status === 401 || e?.status === 403 || /api key not valid/i.test(e?.message ?? "")) {
+    return `The ${config.provider === "gemini" ? "Gemini" : "Anthropic"} API key was rejected. Check ${config.keyName} in .env.`;
+  }
   if (e?.status === 429) return "Rate limited by the model API. Try again in a moment.";
+  if (e?.status === 503 || e?.status === 529) {
+    return `${config.agentModel} is overloaded right now. Try again in a minute, or set AGENT_MODEL in .env to another model.`;
+  }
   if (e?.status && e.status >= 500) return "The model API had a problem. Try again.";
   return `Something went wrong: ${e?.message ?? String(err)}`;
 }

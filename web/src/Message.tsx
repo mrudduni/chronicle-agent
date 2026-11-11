@@ -67,9 +67,24 @@ export function MessageView({ m, onForget }: { m: UiMessage; onForget?: (turnId:
   );
 }
 
-/** "[S3]" in the answer becomes a link the renderer turns into a numbered citation. */
+/**
+ * "[S3]" in the answer becomes a link the renderer turns into a numbered
+ * citation. Some models group them ("[S1, S4]"), so each id in a group gets
+ * its own link.
+ *
+ * Markdown tables can't hold line breaks, so models sometimes write "<br>"
+ * inside a cell. HTML isn't rendered (on purpose: answers quote web pages),
+ * so it's turned into a visible separator instead of showing up as raw text.
+ */
 function linkCitations(text: string) {
-  return text.replace(/\[S(\d+)\]/g, "[$1](#cite-S$1)");
+  return text
+    .replace(/\[(S\d+(?:\s*,\s*S\d+)*)\]/g, (_, ids: string) =>
+      ids
+        .split(/\s*,\s*/)
+        .map((id) => `[${id.slice(1)}](#cite-${id})`)
+        .join(" "),
+    )
+    .replace(/<br\s*\/?>/gi, " · ");
 }
 
 function CiteOrLink(props: { href?: string; children?: React.ReactNode; sources: Source[] }) {

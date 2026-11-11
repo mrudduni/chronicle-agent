@@ -35,8 +35,10 @@ export interface ThreadSummary {
 }
 
 export interface Health {
+  provider: "anthropic" | "gemini";
   model: string;
-  hasAnthropicKey: boolean;
+  hasModelKey: boolean;
+  keyName: string;
   search: { name: string; dateFilter: boolean } | null;
   embeddings: string;
   clockFrozen: boolean;
@@ -45,7 +47,25 @@ export interface Health {
   pendingJobs: number;
 }
 
+export interface DemoState {
+  loaded: boolean;
+  seededFor: string | null;
+  suggestions: string[];
+}
+
+export type Profile = "me" | "demo";
+
 export const browserTz = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+// Which memory the UI is looking at: the person's own, or the demo history.
+// Sent with every request; the server keeps the two completely separate.
+let profile: Profile = "me";
+export const setProfile = (p: Profile) => {
+  profile = p;
+};
+const headers = (extra: Record<string, string> = {}) => ({ ...extra, "x-chronicle-profile": profile });
+const post = (url: string, body: unknown) =>
+  fetch(url, { method: "POST", headers: headers({ "content-type": "application/json" }), body: JSON.stringify(body) });
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
@@ -53,18 +73,18 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  health: () => fetch("/api/health").then((r) => json<Health>(r)),
-  threads: () => fetch("/api/threads").then((r) => json<ThreadSummary[]>(r)),
-  thread: (id: string) => fetch(`/api/threads/${id}`).then((r) => json<{ messages: StoredMessage[] }>(r)),
-  forget: (turnId: number) =>
-    fetch("/api/forget", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ turnId }) }).then((r) => json(r)),
-  setTimezone: (tz: string | null) =>
-    fetch("/api/timezone", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tz }) }).then((r) => json(r)),
+  health: () => fetch("/api/health", { headers: headers() }).then((r) => json<Health>(r)),
+  threads: () => fetch("/api/threads", { headers: headers() }).then((r) => json<ThreadSummary[]>(r)),
+  thread: (id: string) => fetch(`/api/threads/${id}`, { headers: headers() }).then((r) => json<{ messages: StoredMessage[] }>(r)),
+  forget: (turnId: number) => post("/api/forget", { turnId }).then((r) => json(r)),
+  setTimezone: (tz: string | null) => post("/api/timezone", { tz }).then((r) => json(r)),
+  demo: () => fetch("/api/demo").then((r) => json<DemoState>(r)),
+  loadDemo: () => post("/api/demo", { tz: browserTz() }).then((r) => json<DemoState>(r)),
 
   async chat(body: { threadId?: string; text: string }, onEvent: (e: AgentEvent) => void, signal: AbortSignal) {
     const res = await fetch("/api/chat", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: headers({ "content-type": "application/json" }),
       body: JSON.stringify({ ...body, tz: browserTz(), locale: navigator.language }),
       signal,
     });

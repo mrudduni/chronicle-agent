@@ -6,7 +6,7 @@
  * as events stream in.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type AgentEvent, type Health, type StoredMessage, type ThreadSummary, api, browserTz } from "./api";
+import { type AgentEvent, type DemoState, type Health, type Profile, type StoredMessage, type ThreadSummary, api, browserTz, setProfile } from "./api";
 import { MessageView, type UiMessage } from "./Message";
 
 const ZONES: string[] = (() => {
@@ -23,7 +23,34 @@ const EXAMPLES = [
   "What did I ask you yesterday? Is your answer still correct?",
 ];
 
+// Remember demo mode across reloads. Storage can be unavailable (private
+// windows, blocked site data); the app then just starts on the user's own data.
+function savedProfile(): Profile {
+  try {
+    return localStorage.getItem("chronicle.profile") === "demo" ? "demo" : "me";
+  } catch {
+    return "me";
+  }
+}
+
+function saveProfile(p: Profile) {
+  try {
+    localStorage.setItem("chronicle.profile", p);
+  } catch {
+    // Not worth surfacing; demo mode just won't survive a reload.
+  }
+}
+
+const today = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
+
 export function App() {
+  const [profile, setProfileState] = useState<Profile>(() => {
+    const p = savedProfile();
+    setProfile(p);
+    return p;
+  });
+  const [demo, setDemo] = useState<DemoState | null>(null);
+  const [demoBusy, setDemoBusy] = useState(false);
   const [health, setHealth] = useState<Health | null>(null);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [threadId, setThreadId] = useState<string | undefined>();
@@ -45,6 +72,7 @@ export function App() {
         .then((h) => {
           setHealth(h);
           void refreshThreads();
+          void api.demo().then(setDemo).catch(() => {});
         })
         .catch(() => {
           timer = setTimeout(load, 1500);
@@ -144,6 +172,34 @@ export function App() {
     if (threadId) await openThread(threadId);
   }
 
+  /** Switch between the user's own memory and the demo history. */
+  async function switchProfile(p: Profile) {
+    if (busy) return;
+    setProfile(p);
+    saveProfile(p);
+    setProfileState(p);
+    setThreadId(undefined);
+    setMessages([]);
+    setHealth(await api.health());
+    await refreshThreads();
+  }
+
+  /**
+   * Load the demo, or reload it when its dates were set for an earlier day,
+   * so "on Monday" in the suggested questions still means the right Monday.
+   */
+  async function enterDemo(force = false) {
+    if (busy || demoBusy) return;
+    setDemoBusy(true);
+    try {
+      const state = !force && demo?.loaded && demo.seededFor === today() ? demo : await api.loadDemo();
+      setDemo(state);
+      await switchProfile("demo");
+    } finally {
+      setDemoBusy(false);
+    }
+  }
+
   async function changeZone(tz: string) {
     await api.setTimezone(tz === "" ? null : tz);
     setHealth(await api.health());
@@ -170,7 +226,20 @@ export function App() {
           <div className="brand">Chronicle</div>
           {health && (
             <div className="status">
-              {!health.hasAnthropicKey && <span className="badge warn">no ANTHROPIC_API_KEY</span>}
+              {profile === "demo" && (
+                <span className="demo-bar">
+                  <span className="badge demo" title="Sample conversations, kept apart from your own memory">
+                    Demo data
+                  </span>
+                  <button className="link" onClick={() => enterDemo(true)} disabled={busy || demoBusy} title="Reload the demo with dates relative to today; demo chats are cleared">
+                    Reset
+                  </button>
+                  <button className="link" onClick={() => switchProfile("me")} disabled={busy}>
+                    Exit demo
+                  </button>
+                </span>
+              )}
+              {!health.hasModelKey && <span className="badge warn">no {health.keyName}</span>}
               <span className="badge" title="search backend">
                 {health.search ? `${health.search.name}${health.search.dateFilter ? "" : " (no date filter)"}` : "no search"}
               </span>
@@ -188,7 +257,23 @@ export function App() {
         </header>
 
         <section className="chat">
-          {messages.length === 0 ? (
+          {messages.length === 0 && profile === "demo" ? (
+            <div className="empty">
+              <h1>You're looking at demo data</h1>
+              <p>
+                A few past conversations are already in memory: email marketing tools a couple of weeks ago, Postgres hosting the Tuesday before
+                last, and a CRM shortlist on Monday. Open them on the left, or ask about them. Prices in them are sample values, so re-checking
+                should turn up changes.
+              </p>
+              <div className="examples">
+                {(demo?.suggestions ?? []).map((ex) => (
+                  <button key={ex} onClick={() => send(ex)}>
+                    {ex}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="empty">
               <h1>What do you want to look into?</h1>
               <p>I search the web for anything current, and I remember what we talk about, so you can come back and ask what's changed since.</p>
@@ -198,6 +283,15 @@ export function App() {
                     {ex}
                   </button>
                 ))}
+              </div>
+              <div className="demo-offer">
+                <div>
+                  <strong>New here?</strong> Try it on demo data: a few earlier conversations, so you can ask "what did I ask you last Tuesday?"
+                  or "has any of that changed since Monday?" straight away. Your own memory isn't touched.
+                </div>
+                <button onClick={() => enterDemo()} disabled={demoBusy}>
+                  {demoBusy ? "Loading…" : "Try demo data"}
+                </button>
               </div>
             </div>
           ) : (

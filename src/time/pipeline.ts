@@ -141,34 +141,32 @@ function composeRanges(readings: RawReading[], input: ResolverInput, anchors: An
   for (const m of input.text.matchAll(/\bsince\s+then\b|\bsince(?=\s*[?.!]|\s*$)/gi)) {
     const index = m.index!;
     const previous = [...out].reverse().find((r) => r.index < index);
-    let start: number | null = null;
-    let fromDay: string | null = null;
-    let label = "";
-    if (previous) {
-      const c = previous.candidates[0]!;
-      start = c.start;
-      fromDay = c.days?.from ?? null;
-      label = c.label;
-    } else {
-      start = anchors.previousAnswerTs();
-      if (start != null) {
-        const dt = DateTime.fromMillis(start, { zone: ctx.tz });
-        fromDay = dt.toISODate();
-        label = `my previous answer (${dt.toFormat("ccc d LLL")})`;
-      }
-    }
-    if (start == null) continue;
-    const span: TemporalSpan = {
+    const sinceSpan = (start: number, fromDay: string | null, label: string, confidence: number): TemporalSpan => ({
       start,
       end: ctx.nowMs,
       days: fromDay ? { from: fromDay, to: todayIso } : undefined,
       granularity: "day",
       frame: { kind: "experienced" },
-      confidence: previous ? previous.candidates[0]!.confidence : 0.75,
+      confidence,
       resolver: "compose",
       label: `since ${label}`,
-    };
-    out.push({ index, length: m[0].length, text: m[0], candidates: [span] });
+    });
+    if (previous) {
+      // One candidate per reading of the earlier date, so this follows
+      // whichever one the policy (or memory) picks for it.
+      const candidates = previous.candidates.map((c) => sinceSpan(c.start, c.days?.from ?? null, c.label, c.confidence));
+      out.push({ index, length: m[0].length, text: m[0], candidates, follows: previous.index });
+      continue;
+    }
+    const start = anchors.previousAnswerTs();
+    if (start == null) continue;
+    const dt = DateTime.fromMillis(start, { zone: ctx.tz });
+    out.push({
+      index,
+      length: m[0].length,
+      text: m[0],
+      candidates: [sinceSpan(start, dt.toISODate(), `my previous answer (${dt.toFormat("ccc d LLL")})`, 0.75)],
+    });
   }
 
   return out;

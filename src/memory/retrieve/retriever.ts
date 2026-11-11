@@ -403,7 +403,7 @@ export class Retriever {
         tz: q.tz,
         localDay: q.local_day,
         question: redact(q.content),
-        answer: a ? truncate(redact(a.content), answerCap) : "",
+        answer: a ? truncate(redact(this.retireCitations(q.id, a.content)), answerCap) : "",
         answerStatus: !a ? "missing" : a.status === "partial" ? "partial" : "complete",
         claims: this.claimsFor(q),
         reason: p.reason,
@@ -419,6 +419,23 @@ export class Retriever {
     // Chronological reads better in the prompt.
     turns.sort((a, b) => a.askedAt - b.askedAt);
     return { turns, omitted };
+  }
+
+  /**
+   * An old answer's "[S3]" markers point at that turn's search results, but
+   * this turn hands out S-ids of its own. Left as they are, the model cites
+   * an old [S3] and the UI links it to this turn's S3, a different page. So
+   * old markers become the site they came from: "(source: neon.com)".
+   */
+  private retireCitations(turnId: number, answer: string): string {
+    const urls = new Map<string, string>();
+    for (const s of this.store.searchesForTurn(turnId)) {
+      for (const r of s.results as Array<{ id?: string; url?: string }>) if (r.id && r.url) urls.set(r.id, r.url);
+    }
+    return answer.replace(/\[(S\d+(?:\s*,\s*S\d+)*)\]/g, (_, ids: string) => {
+      const sites = [...new Set(ids.split(/\s*,\s*/).map((id) => hostOf(urls.get(id))).filter(Boolean))];
+      return sites.length ? `(source: ${sites.join(", ")})` : "";
+    });
   }
 
   private claimsFor(q: MessageRow): RecalledClaim[] {
@@ -459,4 +476,13 @@ export class Retriever {
 
 function truncate(s: string, n: number) {
   return s.length <= n ? s : `${s.slice(0, n)}…`;
+}
+
+function hostOf(url: string | undefined): string {
+  if (!url) return "";
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
 }

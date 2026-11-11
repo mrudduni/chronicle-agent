@@ -22,6 +22,7 @@ message ─► PRE (code, ~10–50 ms)                      ─► LOOP (model) 
 ## Why this shape
 
 - **One tool, recall in code.** The brief allows one tool. Making recall a tool would cost a round trip and let the model forget to call it. Doing it in code is deterministic and adds no latency.
+- **Provider-neutral loop.** The loop only sees text deltas, tool calls and a stop reason. Claude and Gemini each sit behind a small `ChatModel` adapter that keeps its own message format, so Claude's thinking blocks and Gemini's thought signatures are echoed back untouched. Claude is the default; Gemini (free tier) is a key away.
 - **Local-first.** SQLite (`node:sqlite`, no native build) plus a 34 MB local embedding model: the user's history never leaves the machine except in the prompt. That's how minimi treats personal context too.
 - **Ambiguity resolved by evidence.** English speakers genuinely disagree on what "last Tuesday" means. Any fixed grammar rule is wrong for some users; checking which Tuesday actually has the conversation isn't.
 - **Visible working.** The UI streams how dates were read, what was recalled and each search, so a wrong assumption is caught in a second, not after reading the answer.

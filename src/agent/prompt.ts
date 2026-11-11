@@ -9,11 +9,12 @@
  *
  * Volatile content goes last on purpose. Prompt caching matches prefixes, so
  * putting today's date in the system prompt would invalidate the cache on
- * every request. The context block is sent as a mid-conversation system
- * message: it carries operator authority (it's from the app, not the user)
- * without touching the cached prefix.
+ * every request. On Claude the context block is sent as a mid-conversation
+ * system message: it carries operator authority (it's from the app, not the
+ * user) without touching the cached prefix. Gemini has no such role, so there
+ * it rides along as a second part of the user's turn, clearly labelled.
  */
-import type Anthropic from "@anthropic-ai/sdk";
+import type { ToolSpec } from "../llm/types";
 import type { MemoryPack } from "../memory/retrieve/retriever";
 import { renderMemoryForPrompt } from "../memory/retrieve/render";
 import { describeNow, type ResolvedTime, type SearchWindow, type TimeContext, promptLinesOf } from "../time";
@@ -22,7 +23,7 @@ export const SYSTEM_PROMPT = `You are Chronicle, a research assistant that can s
 
 How to answer
 - Lead with the answer, then the supporting detail. Keep it as short as the question allows.
-- Use a table when comparing several options or reporting what changed.
+- Use a table when comparing several options or reporting what changed. Write plain Markdown: no HTML tags (no <br> in table cells).
 - Only ask a clarifying question if you really can't proceed. Otherwise make the most reasonable assumption and state it in a short clause.
 - Write like a knowledgeable colleague: direct, specific, no filler, no disclaimers about being an AI.
 
@@ -32,7 +33,7 @@ Searching
 - Prefer primary sources: the vendor's own pricing page, changelog, docs, blog or press release.
 - Use mode "page" for the current state of something (pricing pages have no publish date, so dates aren't filtered). Use mode "news" with since for announcements and changes after a date.
 - Each result shows its publish date and age. Prefer newer sources. When sources disagree, say so and say which is newer.
-- Cite every fact that came from a search with its id right after the sentence, like [S3]. Only cite ids you were given.
+- Cite every fact that came from a search with its id right after the sentence, like [S3], each id in its own brackets ([S3][S5]). Only cite ids you were given.
 - Give volatile facts a date: "$20/user/month (pricing page, as of 11 Nov 2026)".
 
 Dates
@@ -49,13 +50,13 @@ Re-checking earlier answers
 - When asked whether something changed or is still correct, re-check each relevant fact with fresh searches, then give a short table: what it was (and when you said it), what it is now (with source and date), and a verdict of Changed, Unchanged, or Couldn't verify.
 - Call something Changed only on evidence you found in this turn's searches, not from your own background knowledge.`;
 
-export const WEB_SEARCH_TOOL: Anthropic.Beta.BetaTool = {
+export const WEB_SEARCH_TOOL: ToolSpec = {
   name: "web_search",
   description:
     'Search the web. mode "page": the current state of something (pricing, plans, docs, limits); results are not date-filtered. ' +
     'mode "news": articles, announcements, launches, changelogs; pass since (YYYY-MM-DD) to get only results published after that date. ' +
     "Make independent searches in the same step; they run in parallel.",
-  input_schema: {
+  parameters: {
     type: "object",
     properties: {
       query: { type: "string", description: "What to search for. Include the product or company name." },
@@ -66,7 +67,6 @@ export const WEB_SEARCH_TOOL: Anthropic.Beta.BetaTool = {
     },
     required: ["query", "mode"],
   },
-  eager_input_streaming: true,
 };
 
 export interface ContextParts {

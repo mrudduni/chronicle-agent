@@ -9,7 +9,7 @@ import { Agent } from "./agent/orchestrator";
 import { config } from "./config";
 import { openDb } from "./db";
 import { type Embedder, LocalEmbedder, noEmbedder } from "./embed";
-import { anthropic, createWorker } from "./llm/client";
+import { chatModel, createWorker } from "./llm/client";
 import { llmTimeFallback } from "./llm/time-fallback";
 import type { WorkerLlm } from "./llm/types";
 import { createDerivation } from "./memory/derive";
@@ -30,7 +30,7 @@ export function createApp(opts: AppOptions = {}) {
   const clock = opts.clock ?? (config.frozenNow ? new FixedClock(config.frozenNow) : systemClock);
   const embedder = opts.embedder ?? (config.embeddings ? new LocalEmbedder() : noEmbedder);
   const worker = opts.worker ?? createWorker();
-  const llmAvailable = !!anthropic || !!opts.worker;
+  const llmAvailable = !!chatModel || !!opts.worker;
 
   const store = new MemoryStore(db);
   const retriever = new Retriever(db, store, embedder);
@@ -44,7 +44,7 @@ export function createApp(opts: AppOptions = {}) {
     derivation,
     search,
     clock,
-    client: anthropic,
+    model: chatModel,
     timeFallback: llmAvailable ? llmTimeFallback(worker) : undefined,
   });
 

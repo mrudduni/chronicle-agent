@@ -13,9 +13,11 @@ if (existsSync(".env")) process.loadEnvFile(".env");
 
 const Env = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
   TAVILY_API_KEY: z.string().optional(),
-  AGENT_MODEL: z.string().default("claude-opus-5-5"),
-  WORKER_MODEL: z.string().default("claude-haiku-5-5"),
+  LLM_PROVIDER: z.enum(["anthropic", "gemini"]).optional(),
+  AGENT_MODEL: z.string().optional(),
+  WORKER_MODEL: z.string().optional(),
   AGENT_EFFORT: z.enum(["low", "medium", "high"]).default("low"),
   FAST_MODE: z.enum(["true", "false"]).default("false"),
   NOW: z.string().optional(),
@@ -28,11 +30,26 @@ const Env = z.object({
 const env = Env.parse(process.env);
 const blank = (v?: string) => (v && v.trim() ? v.trim() : undefined);
 
+const anthropicKey = blank(env.ANTHROPIC_API_KEY);
+const geminiKey = blank(env.GEMINI_API_KEY);
+// An explicit choice wins; otherwise use whichever key is present, Claude first.
+const provider = env.LLM_PROVIDER ?? (anthropicKey ? "anthropic" : geminiKey ? "gemini" : "anthropic");
+
+// Default models per provider. The Gemini pair both have a free tier.
+const MODELS = {
+  anthropic: { agent: "claude-opus-5-5", worker: "claude-haiku-5-5", keyName: "ANTHROPIC_API_KEY" },
+  gemini: { agent: "gemini-3.6-flash", worker: "gemini-3.5-flash-lite", keyName: "GEMINI_API_KEY" },
+} as const;
+
 export const config = {
-  anthropicKey: blank(env.ANTHROPIC_API_KEY),
+  provider,
+  /** The env variable the chosen provider needs, for messages to the user. */
+  keyName: MODELS[provider].keyName,
+  anthropicKey,
+  geminiKey,
   tavilyKey: blank(env.TAVILY_API_KEY),
-  agentModel: env.AGENT_MODEL,
-  workerModel: env.WORKER_MODEL,
+  agentModel: blank(env.AGENT_MODEL) ?? MODELS[provider].agent,
+  workerModel: blank(env.WORKER_MODEL) ?? MODELS[provider].worker,
   agentEffort: env.AGENT_EFFORT,
   fastMode: env.FAST_MODE === "true",
   frozenNow: blank(env.NOW),

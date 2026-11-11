@@ -7,15 +7,16 @@
  *   npm run eval            all scenarios
  *   npm run eval -- crm     scenarios whose id contains "crm"
  *
- * Needs ANTHROPIC_API_KEY (and ideally TAVILY_API_KEY). Costs a few cents.
+ * Needs a model key (ANTHROPIC_API_KEY or GEMINI_API_KEY) and ideally
+ * TAVILY_API_KEY. Grading uses the same provider's agent model.
  */
 import { rmSync } from "node:fs";
 import { DateTime } from "luxon";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { createApp } from "../src/app";
 import type { AgentEvent } from "../src/agent/events";
-import { anthropic } from "../src/llm/client";
+import { config } from "../src/config";
+import { chatModel, createWorker } from "../src/llm/client";
 import { FixedClock } from "../src/time";
 
 const TZ = "Asia/Kolkata";
@@ -69,7 +70,8 @@ const SCENARIOS: Scenario[] = [
 const Grade = z.object({ pass: z.boolean(), score: z.number().describe("1 to 5"), reason: z.string() });
 
 async function main() {
-  if (!anthropic) throw new Error("ANTHROPIC_API_KEY is required for evals.");
+  if (!chatModel) throw new Error(`${config.keyName} is required for evals.`);
+  const grader = createWorker(config.agentModel, "medium");
   const filter = process.argv[2];
   const results: Array<{ id: string; pass: boolean; score: number; reason: string; ms: number; prepMs: number }> = [];
 
@@ -109,18 +111,13 @@ async function main() {
       })
       .join("\n\n");
 
-    const graded = await anthropic.messages.parse({
-      model: "claude-opus-5-5",
-      max_tokens: 2000,
-      output_config: { format: zodOutputFormat(Grade), effort: "medium" },
-      messages: [
-        {
-          role: "user",
-          content: `You grade a chat agent. Today is ${today.toFormat("cccc d LLLL yyyy")}.\n\nRubric:\n${s.rubric}\n\nFull transcript (earlier turns were real conversations on the dates shown):\n${transcript}\n\nGrade only the final answer.`,
-        },
-      ],
-    });
-    const g = graded.parsed_output ?? { pass: false, score: 0, reason: "grader returned nothing" };
+    const g = await grader
+      .json(Grade, {
+        maxTokens: 2000,
+        system: "You grade a chat agent's final answer against a rubric. Be strict and specific.",
+        user: `Today is ${today.toFormat("cccc d LLLL yyyy")}.\n\nRubric:\n${s.rubric}\n\nFull transcript (earlier turns were real conversations on the dates shown):\n${transcript}\n\nGrade only the final answer.`,
+      })
+      .catch((err: Error) => ({ pass: false, score: 0, reason: `grader failed: ${err.message}` }));
     results.push({ id: s.id, ...g, ms, prepMs });
     console.log(`${g.pass ? "PASS" : "FAIL"}  ${s.id}  (${(ms / 1000).toFixed(1)} s, prep ${prepMs} ms)  ${g.reason}`);
     console.log(`  Q: ${question}\n  A: ${answer.slice(0, 400).replace(/\n/g, " ")}${answer.length > 400 ? "…" : ""}\n`);

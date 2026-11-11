@@ -218,6 +218,14 @@ describe("policy", () => {
     expect(resolved!.decision).toBe("use-and-state");
   });
 
+  it("T2: 'since then' follows memory's choice of Tuesday, not the first guess", async () => {
+    const readings = await read("Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then?");
+    const resolved = decide(readings, (span) => (span.days?.from === "2026-11-03" ? 2 : 0));
+    const since = resolved.find((r) => r.reading.text.toLowerCase() === "since then")!;
+    expect(since.chosen.days).toEqual({ from: "2026-11-03", to: "2026-11-11" });
+    expect(searchWindowOf(resolved, ctxAt("2026-11-11T10:00:00+05:30"))!.since).toBe("2026-11-02");
+  });
+
   it("both readings with conversations means cover both", async () => {
     const readings = await read("Last Tuesday I asked you about Postgres hosting");
     const [resolved] = decide(readings, () => 1);

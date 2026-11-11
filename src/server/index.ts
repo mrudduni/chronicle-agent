@@ -9,20 +9,28 @@
  *   POST /api/timezone       declare (or clear) the timezone to use
  *   GET  /api/health         config summary for the UI header
  *   GET  /api/traces/latest  timings of the last turn (dev panel)
+ *   GET  /api/demo           whether demo data is loaded, and questions to try
+ *   POST /api/demo           load (or reload) the demo history for today's dates
+ *
+ * Every route works on one "profile": the person's own memory, or the demo.
+ * The UI picks it with the x-chronicle-profile header; the two never mix.
  */
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
+import { citedIds } from "../agent/citations";
 import { createApp } from "../app";
+import { DEMO_USER, demoState, seedDemo } from "../demo/seed";
 import { config } from "../config";
 import { LocalEmbedder } from "../embed";
+import { chatModel } from "../llm/client";
 import { isValidZone } from "../time";
 import type { AgentEvent } from "../agent/events";
 
 const app = createApp();
 const { store, agent, derivation, db, clock, search } = app;
-const userId = config.defaultUserId;
+const userOf = (c: Context) => (c.req.header("x-chronicle-profile") === "demo" ? DEMO_USER : config.defaultUserId);
 
 // Load the embedding model and heal derived memory in the background, so
 // neither delays the server coming up.
@@ -42,6 +50,7 @@ api.post("/chat", async (c) => {
   const parsed = ChatBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? "bad request" }, 400);
   const body = parsed.data;
+  const userId = userOf(c);
 
   return streamSSE(c, async (stream) => {
     const controller = new AbortController();
@@ -63,16 +72,16 @@ api.post("/chat", async (c) => {
   });
 });
 
-api.get("/threads", (c) => c.json(store.listThreads(userId)));
+api.get("/threads", (c) => c.json(store.listThreads(userOf(c))));
 
 api.get("/threads/:id", (c) => {
   const thread = store.thread(c.req.param("id"));
-  if (!thread || thread.user_id !== userId) return c.json({ error: "not found" }, 404);
+  if (!thread || thread.user_id !== userOf(c)) return c.json({ error: "not found" }, 404);
   const messages = store.threadMessages(thread.id).map((m) => {
     // Re-attach the cited sources to old answers, so citations still link after a reload.
     let sources: Array<{ id: string; title: string; url: string; publishedAt: string | null }> = [];
     if (m.role === "assistant" && m.reply_to) {
-      const cited = new Set([...m.content.matchAll(/\[S(\d+)\]/g)].map((x) => `S${x[1]}`));
+      const cited = citedIds(m.content);
       sources = store
         .searchesForTurn(m.reply_to)
         .flatMap((s) => s.results as typeof sources)
@@ -86,23 +95,25 @@ api.get("/threads/:id", (c) => {
 api.post("/forget", async (c) => {
   const body = z.object({ turnId: z.number().int() }).safeParse(await c.req.json().catch(() => null));
   if (!body.success) return c.json({ error: "turnId required" }, 400);
-  const ok = store.forgetTurn(userId, body.data.turnId, clock.now());
+  const ok = store.forgetTurn(userOf(c), body.data.turnId, clock.now());
   return c.json({ ok });
 });
 
 api.post("/timezone", async (c) => {
   const body = z.object({ tz: z.string().nullable() }).safeParse(await c.req.json().catch(() => null));
   if (!body.success || (body.data.tz !== null && !isValidZone(body.data.tz))) return c.json({ error: "unknown timezone" }, 400);
-  store.declareTz(userId, body.data.tz, clock.now());
+  store.declareTz(userOf(c), body.data.tz, clock.now());
   return c.json({ ok: true, tz: body.data.tz });
 });
 
 api.get("/health", (c) => {
-  const user = store.user(userId);
+  const user = store.user(userOf(c));
   return c.json({
+    provider: config.provider,
     model: config.agentModel,
     worker: config.workerModel,
-    hasAnthropicKey: !!config.anthropicKey,
+    hasModelKey: !!chatModel,
+    keyName: config.keyName,
     search: search.provider ? { name: search.provider.name, dateFilter: search.provider.supportsDateFilter } : null,
     embeddings: app.embedder.ready() ? app.embedder.model : "loading or off",
     clockFrozen: clock.frozen,
@@ -112,6 +123,13 @@ api.get("/health", (c) => {
   });
 });
 
+api.get("/demo", (c) => c.json(demoState(app)));
+
+api.post("/demo", async (c) => {
+  const body = z.object({ tz: z.string().max(64).optional() }).safeParse(await c.req.json().catch(() => ({})));
+  return c.json(seedDemo(app, body.success ? body.data.tz : undefined));
+});
+
 api.get("/traces/latest", (c) => {
   const row = db.prepare("SELECT data_json, ts_utc FROM traces ORDER BY id DESC LIMIT 1").get() as { data_json: string; ts_utc: number } | undefined;
   return c.json(row ? { ...JSON.parse(row.data_json), at: row.ts_utc } : null);
@@ -119,7 +137,14 @@ api.get("/traces/latest", (c) => {
 
 serve({ fetch: api.fetch, port: config.port }, (info) => {
   console.log(`API on http://localhost:${info.port}  (UI: http://localhost:5173)`);
-  if (!config.anthropicKey) console.warn("ANTHROPIC_API_KEY is not set: chat will not work until it is.");
-  if (!config.tavilyKey && config.anthropicKey) console.warn("TAVILY_API_KEY is not set: using Anthropic's built-in web search (no date filters).");
+  console.log(`Model: ${config.agentModel} (${config.provider}), worker: ${config.workerModel}`);
+  if (!chatModel) console.warn(`${config.keyName} is not set: chat will not work until it is.`);
+  if (!config.tavilyKey) {
+    console.warn(
+      config.anthropicKey
+        ? "TAVILY_API_KEY is not set: using Anthropic's built-in web search (no date filters)."
+        : "TAVILY_API_KEY is not set: web search is off. Get a free key at https://app.tavily.com.",
+    );
+  }
   if (clock.frozen) console.warn(`Clock is frozen at ${new Date(clock.now()).toISOString()} (NOW in .env).`);
 });

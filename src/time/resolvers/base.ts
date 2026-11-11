@@ -26,6 +26,8 @@ export interface RawReading {
   length: number;
   text: string;
   candidates: TemporalSpan[];
+  /** For "since then": the index of the reading it runs from (see TemporalReading.follows). */
+  follows?: number;
 }
 
 /**

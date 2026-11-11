@@ -64,6 +64,13 @@ export interface TemporalReading {
   target: Target;
   /** Best first. More than one means the expression is ambiguous. */
   candidates: TemporalSpan[];
+  /**
+   * Set on "since then": the index of the earlier reading it counts from.
+   * It has one candidate per candidate of that reading, in the same order,
+   * and the policy picks whichever one matches that reading's choice. So when
+   * memory settles "last Tuesday" on 3 Nov, "since then" means since 3 Nov too.
+   */
+  follows?: number;
 }
 
 export type TzSource = "browser" | "declared" | "fallback";

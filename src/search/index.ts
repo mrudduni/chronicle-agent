@@ -37,7 +37,7 @@ export class SearchService {
   }
 
   async search(req: SearchRequest, ids: { nextId(): string }, signal?: AbortSignal) {
-    if (!this.provider) throw new Error("No search backend configured (set TAVILY_API_KEY or ANTHROPIC_API_KEY).");
+    if (!this.provider) throw new Error("No search backend configured (set TAVILY_API_KEY).");
     const key = JSON.stringify([this.provider.name, req.query.trim().toLowerCase(), req.mode, req.since, req.until, req.domains]);
     const hit = this.cache.get(key);
     let raw: Omit<SearchResult, "id">[];

@@ -69,6 +69,16 @@ header { display: flex; justify-content: space-between; align-items: center; gap
 .examples button { text-align: left; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .examples button:hover { border-color: var(--accent); }
 
+/* demo data: the offer on the empty screen, and the bar shown while it's on */
+.demo-offer { display: flex; gap: 14px; align-items: center; margin-top: 20px; padding: 12px 14px; border-radius: 10px; background: var(--accent-soft); font-size: 14px; }
+.demo-offer button { flex: none; padding: 8px 14px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; font-weight: 600; }
+.demo-offer button:disabled { opacity: 0.6; }
+.demo-bar { display: inline-flex; gap: 6px; align-items: center; }
+.badge.demo { color: var(--accent); background: var(--accent-soft); border-color: transparent; font-weight: 600; }
+button.link { border: 0; background: none; padding: 2px 4px; font-size: 12px; color: var(--muted); text-decoration: underline; cursor: pointer; }
+button.link:disabled { opacity: 0.5; cursor: default; }
+@media (max-width: 640px) { .demo-offer { flex-direction: column; align-items: stretch; } }
+
 .msg { margin-bottom: 22px; }
 .msg.user { display: flex; flex-direction: column; align-items: flex-end; }
 .msg.user .bubble { background: var(--bubble); padding: 9px 14px; border-radius: 14px 14px 4px 14px; max-width: 85%; white-space: pre-wrap; }
@@ -83,7 +93,7 @@ header { display: flex; justify-content: space-between; align-items: center; gap
 .answer code { background: var(--code); padding: 1px 4px; border-radius: 4px; font-size: 0.92em; }
 .answer pre { background: var(--code); padding: 10px; border-radius: 8px; overflow-x: auto; }
 .answer a { color: var(--accent); }
-.answer .cite { font-size: 11px; vertical-align: super; text-decoration: none; padding: 0 2px; margin-left: 1px; border-radius: 4px; background: var(--accent-soft); }
+.answer .cite { font-size: 11px; vertical-align: super; text-decoration: none; padding: 0 3px; margin-left: 2px; border-radius: 4px; background: var(--accent-soft); }
 .muted { color: var(--muted); }
 .cursor { display: inline-block; width: 7px; height: 15px; background: var(--accent); vertical-align: text-bottom; animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
